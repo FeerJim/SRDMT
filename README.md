@@ -7,4 +7,4 @@ The folder *Flow Formulation* contains a .py file with the functions used to gen
 
 The folder *JIAM - EJIAM - LPB* contains three .py files with the functions used to generate the models JIAM, S-JIAM, EJIAM and the algorithm LPB. 
 
-The Tests.ipynb file shows an example for running test instances using the different models or algorithms presented in the paper.
+The **Tests.ipynb** file shows an example for running test instances using the different models or algorithms presented in the paper.
