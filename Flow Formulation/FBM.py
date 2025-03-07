@@ -313,6 +313,7 @@ def analysis_FBM(instances,K,file = None,output = 0, T_limit = None, focus = Non
     data_output = [('FBM_'+inst,inst) for inst in instances]
     df_output = pd.DataFrame(data_output,columns = ['Log','inst'])
     df_output['objIP'] = 0.0
+    df_output['bestBound'] = 0.0
     df_output['MIPGap'] = 0.0
     df_output['numVars'] = 0
     df_output['numConstrs'] = 0
@@ -332,6 +333,7 @@ def analysis_FBM(instances,K,file = None,output = 0, T_limit = None, focus = Non
 
         # Parameters analyzed in the tables
         df_output.loc[df_output.Log == 'FBM_'+inst,['objIP']] = m.ObjVal
+        df_output.loc[df_output.Log == 'FBM_'+inst,['bestBound']] = m.ObjBound
         df_output.loc[df_output.Log == 'FBM_'+inst,['TimePre']] = t3
         df_output.loc[df_output.Log == 'FBM_'+inst,['TimeOPT']] = m.Runtime
         df_output.loc[df_output.Log == 'FBM_'+inst,['TimeTotal']] = t3+t4
