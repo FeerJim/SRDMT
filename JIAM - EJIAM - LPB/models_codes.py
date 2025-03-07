@@ -747,7 +747,13 @@ def EJIAM(r,d,t,H,I,M,output = 0, T_limit = None, focus = None, BP=0, presolve =
         modelo.setParam('Seed', seed)
     
     # Variables
-    x = modelo.addVars(r.keys(), I.keys(), vtype = GRB.BINARY, name="x")
+    I_aux = {j:{i for i in I.keys() if I[i].left >= r[j] and I[i].right <= d[j]} for j in r.keys()}
+    x = {}
+    for j in r.keys():
+        for i in I.keys():
+            if I[i].left >= r[j] and I[i].right <= d[j]:
+                x[j,i] = modelo.addVar(vtype = GRB.BINARY, name = "x", lb = 0.0)
+    #x = modelo.addVars(r.keys(), I.keys(), vtype = GRB.BINARY, name="x")
     z = modelo.addVars(range(1,P+1), vtype = GRB.INTEGER, name="z", lb = 0, ub = M)
 
     # Objective Function
@@ -758,7 +764,9 @@ def EJIAM(r,d,t,H,I,M,output = 0, T_limit = None, focus = None, BP=0, presolve =
 
     # Constraints
     # jobs processed
-    modelo.addConstrs((x.sum(j,'*') == 1 for j in r.keys()), "jobs") 
+    # modelo.addConstrs((x.sum(j,'*') == 1 for j in r.keys()), "jobs") 
+    for j in r.keys():
+        modelo.addConstr(quicksum(x[j,i] for i in I_aux[j]) == 1, "jobs") 
 
     # Conflicts
     for q in range(P):
@@ -766,14 +774,14 @@ def EJIAM(r,d,t,H,I,M,output = 0, T_limit = None, focus = None, BP=0, presolve =
             aux_y = 0
             for i in range(len(I) - k +1):
                 if _inter(I,t,i,k,q) == True:
-                    modelo.addConstr(quicksum(x[j,i+l] for j in r.keys() for l in range(1,k+1)) <= z[q+1], name = "machines")
+                    modelo.addConstr(quicksum(x[j,i+l] for j in r.keys() for l in range(1,k+1) if I[i+l].left >= r[j] and I[i+l].right <= d[j]) <= z[q+1], name = "machines")
                     aux_y = 1
             if aux_y == 1:
                 break
     
     # Eliminating invalid intervals
-    modelo.addConstrs( (x[j,i] <= 0.0 for j in r.keys() for i in I.keys() if I[i].left < r[j]), "compatibility_left")
-    modelo.addConstrs( (x[j,i] <= 0.0 for j in r.keys() for i in I.keys() if I[i].right > d[j]), "compatibility_right")
+    #modelo.addConstrs( (x[j,i] <= 0.0 for j in r.keys() for i in I.keys() if I[i].left < r[j]), "compatibility_left")
+    #modelo.addConstrs( (x[j,i] <= 0.0 for j in r.keys() for i in I.keys() if I[i].right > d[j]), "compatibility_right")
     
     
     # Modified the priority in the branching selection
@@ -789,7 +797,8 @@ def EJIAM(r,d,t,H,I,M,output = 0, T_limit = None, focus = None, BP=0, presolve =
     modelo.optimize()
     
     # Save solution
-    ind = [(j,i) for j in r.keys() for i in I.keys() if x[j, i].x >= 0.5]
+    # ind = [(j,i) for j in r.keys() for i in I.keys() if x[j, i].x >= 0.5]
+    ind = [(j,i) for j in r.keys() for i in I_aux[j] if x[j, i].x >= 0.5]
     M_max = int(max([z[q].x for q in range(1,P+1)]))
     z_sol = {q: z[q].x for q in range(1,P+1)}
     
@@ -911,7 +920,13 @@ def EJIAM_LR(r,d,t,H,I,M,output = 0, T_limit = None, focus = None, BP=0, presolv
         modelo.setParam('Seed', seed)
     
     # Variables
-    x = modelo.addVars(r.keys(), I.keys(), vtype = GRB.CONTINUOUS, name="x", lb = 0.0)
+    I_aux = {j:{i for i in I.keys() if I[i].left >= r[j] and I[i].right <= d[j]} for j in r.keys()}
+    x = {}
+    for j in r.keys():
+        for i in I.keys():
+            if I[i].left >= r[j] and I[i].right <= d[j]:
+                x[j,i] = modelo.addVar(vtype = GRB.CONTINUOUS, name = "x", lb = 0.0, ub = float(p))
+    # x = modelo.addVars(r.keys(), I.keys(), vtype = GRB.CONTINUOUS, name="x", lb = 0.0)
     z = modelo.addVars(range(1,P+1), vtype = GRB.CONTINUOUS, name="z", lb = 0.0, ub = float(M))
 
     # Objective Function
@@ -922,14 +937,26 @@ def EJIAM_LR(r,d,t,H,I,M,output = 0, T_limit = None, focus = None, BP=0, presolv
 
     # Constraints
     # jobs processed
-    modelo.addConstrs((x.sum(j,'*') == p for j in r.keys()), "jobs") 
+    #modelo.addConstrs((x.sum(j,'*') == p for j in r.keys()), "jobs") 
+    for j in r.keys():
+        modelo.addConstr(quicksum(x[j,i] for i in I_aux[j]) == p, "jobs") 
+
 
     # conflicts between jobs
-    modelo.addConstrs((quicksum(x[j,i+l] for j in r.keys() for l in range(1,k+1)) <= p*z[q+1] for q in range(P) for k in range(1,y+1) for i in range(len(I)-k+1) if _inter(I,t,i,k,q) == True), "machines")
+    #modelo.addConstrs((quicksum(x[j,i+l] for j in r.keys() for l in range(1,k+1)) <= p*z[q+1] for q in range(P) for k in range(1,y+1) for i in range(len(I)-k+1) if _inter(I,t,i,k,q) == True), "machines")
+    for q in range(P):
+        for k in range(y,0,-1):
+            aux_y = 0
+            for i in range(len(I) - k +1):
+                if _inter(I,t,i,k,q) == True:
+                    modelo.addConstr(quicksum(x[j,i+l] for j in r.keys() for l in range(1,k+1) if I[i+l].left >= r[j] and I[i+l].right <= d[j]) <= p*z[q+1], name = "machines")
+                    aux_y = 1
+            if aux_y == 1:
+                break
     
     # Eliminating invalid intervals
-    modelo.addConstrs( (x[j,i] <= 0.0 for j in r.keys() for i in I.keys() if I[i].left < r[j]), "compatibility_left")
-    modelo.addConstrs( (x[j,i] <= 0.0 for j in r.keys() for i in I.keys() if I[i].right > d[j]), "compatibility_right")
+    #modelo.addConstrs( (x[j,i] <= 0.0 for j in r.keys() for i in I.keys() if I[i].left < r[j]), "compatibility_left")
+    #modelo.addConstrs( (x[j,i] <= 0.0 for j in r.keys() for i in I.keys() if I[i].right > d[j]), "compatibility_right")
     
     # Modified the priority in the branching selection
     if BP == 1:
@@ -944,7 +971,7 @@ def EJIAM_LR(r,d,t,H,I,M,output = 0, T_limit = None, focus = None, BP=0, presolv
     modelo.optimize()
     
     # Save solution
-    ind = {(j,i): round(x[j,i].x,3) for j in r.keys() for i in I.keys() if x[j, i].x >= 1e-3}
+    ind = {(j,i): round(x[j,i].x,3) for j in r.keys() for i in I.keys() if I[i].left >= r[j] and I[i].right <= d[j] and x[j, i].x >= 1e-3}
     z_sol = {q: z[q].x for q in range(1,P+1)}
 
     return modelo, ind,z_sol
@@ -1080,6 +1107,7 @@ def table_JIAM(instancias,K,file = None, T = None, guardar = False, output = 1, 
     data_output = [('JIAM_'+inst,inst) for inst in instancias]
     df_output = pd.DataFrame(data_output,columns = ['Log','inst'])
     df_output['objIP'] = 0.0
+    df_output['bestBound'] = 0.0
     df_output['MIPGap'] = 0.0
     df_output['numVars'] = 0
     df_output['numConstrs'] = 0
@@ -1113,6 +1141,7 @@ def table_JIAM(instancias,K,file = None, T = None, guardar = False, output = 1, 
 
         # Columns of the table
         df_output.loc[df_output.Log == 'JIAM_'+inst,['objIP']] = m.ObjVal
+        df_output.loc[df_output.Log == 'JIAM_'+inst,['bestBound']] = m.ObjBound
         df_output.loc[df_output.Log == 'JIAM_'+inst,['TimePre']] = t3
         df_output.loc[df_output.Log == 'JIAM_'+inst,['TimeOPT']] = m.Runtime
         df_output.loc[df_output.Log == 'JIAM_'+inst,['TimeTotal']] = t3+t4
@@ -1157,6 +1186,7 @@ def table_S_JIAM(instancias,K,file = None, T = None, guardar = False,output = 1,
     data_output = [('S_JIAM_'+inst,inst) for inst in instancias]
     df_output = pd.DataFrame(data_output,columns = ['Log','inst'])
     df_output['objIP'] = 0.0
+    df_output['bestBound'] = 0.0
     df_output['MIPGap'] = 0.0
     df_output['numVars'] = 0
     df_output['numConstrs'] = 0
@@ -1219,6 +1249,7 @@ def table_S_JIAM(instancias,K,file = None, T = None, guardar = False,output = 1,
 
         # Columns of the table
         df_output.loc[df_output.Log == 'S_JIAM_'+inst,['objIP']] = m.ObjVal
+        df_output.loc[df_output.Log == 'S_JIAM_'+inst,['bestBound']] = m.ObjBound
         df_output.loc[df_output.Log == 'S_JIAM_'+inst,['TimePre']] = t3+t5
         df_output.loc[df_output.Log == 'S_JIAM_'+inst,['TimeOPT']] = m.Runtime
         df_output.loc[df_output.Log == 'S_JIAM_'+inst,['TimeTotal']] = t3+t4
@@ -1261,6 +1292,7 @@ def table_EJIAM(instancias,M,p = None, L = 60,file = None, guardar = False, outp
     data_output = [('EJIAM_'+inst,inst) for inst in instancias]
     df_output = pd.DataFrame(data_output,columns = ['Log','inst'])
     df_output['objIP'] = 0.0
+    df_output['bestBound'] = 0.0
     df_output['MIPGap'] = 0.0
     df_output['numVars'] = 0
     df_output['numConstrs'] = 0
@@ -1295,6 +1327,7 @@ def table_EJIAM(instancias,M,p = None, L = 60,file = None, guardar = False, outp
 
         # Columns of the table
         df_output.loc[df_output.Log == 'EJIAM_'+inst,['objIP']] = round(m.ObjVal,0)
+        df_output.loc[df_output.Log == 'EJIAM_'+inst,['bestBound']] = round(m.ObjBound,0)
         df_output.loc[df_output.Log == 'EJIAM_'+inst,['TimePre']] = t3
         df_output.loc[df_output.Log == 'EJIAM_'+inst,['TimeOPT']] = m.Runtime
         df_output.loc[df_output.Log == 'EJIAM_'+inst,['TimeTotal']] = t3+t4
